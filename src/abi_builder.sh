@@ -48,8 +48,18 @@ jq -c '.[0][]' facets.json | while read -r facet; do
 
   jq -c '.[] | select(.type=="function")' <<<"$abi" | while read -r fn; do
     name=$(jq -r '.name' <<<"$fn")
-    types=$(jq -r '[.inputs[].type] | join(",")' <<<"$fn")
+    types=$(jq -r '
+      def canon_type:
+        if (.type | test("^tuple")) then
+          "(" + ([.components[] | canon_type] | join(",")) + ")" + (.type | sub("^tuple";""))
+        else
+          .type
+        end;
+      [.inputs[] | canon_type] | join(",")
+    ' <<<"$fn")
     sel=$(cast sig "${name}(${types})")
-    grep -qi "^${sel}$" <<<"$selectors" && echo "  $sel  ${name}(${types})"
+    if grep -qi "^${sel}$" <<<"$selectors"; then
+      echo "  $sel  ${name}(${types})"
+    fi
   done
 done
